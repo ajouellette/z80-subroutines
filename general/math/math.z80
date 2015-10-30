@@ -1,0 +1,133 @@
+;; Math routines
+
+SqrtHL5:
+;; Square Root
+;;   compute the square root of a 2-byte number
+;; Author: Xeda
+;; Inputs:
+;;   HL: number to be square rooted
+;; Outputs:
+;;   A: square root
+;; Cost:
+;;   111 bytes
+;;   555 t-states worst case
+    ; zero some registers
+    xor a
+    ld c,a
+    ld d,a
+    ;move the LSB of the input into E for later use, then shift the LSB into L and load H with 0.
+    ;H will be a carry register, where the bits in L are rotated in
+    ld e,l
+    ld l,h
+    ld h,c
+    ;Iteration 1 is optimised
+    ; C is treated as the accumulator
+    add hl,hl
+    add hl,hl
+    sub h
+    jr nc,$+5
+    inc c
+    cpl
+    ld h,a
+    ;Iteration 2
+    ; rotate in 2 more bits from the MSB of the input into H
+    add hl,hl
+    add hl,hl
+    ; shift the accumulator
+    rl c
+    ld a,c
+    rla
+    ; A is now double the shifted accumulator
+    sub h
+    ; doubles as a comparison of the carry register (H) to double the accumulator
+    jr nc,$+5
+    ; If the carry is > 2*accumulator, the bit in the accumulator needs to be 1:
+    inc c
+    ; We need to perform H-(2C+1), but A=2C-H.
+    ; We could do NEG to get A=H-2C, then DEC A, but NEG = CPL \ INC A
+    ; NEG \ DEC A  =  CPL \ INC A \ DEC A
+    ; So just use CPL, saving 8 t-states, 1 byte
+    cpl
+    ld h,a
+    ;Iteration 3
+    add hl,hl
+    add hl,hl
+    rl c
+    ld a,c
+    rla
+    sub h
+    jr nc,$+5
+    inc c
+    cpl
+    ld h,a
+    ;Iteration 4
+    add hl,hl
+    add hl,hl
+    rl c
+    ld a,c
+    rla
+    sub h
+    jr nc,$+5
+    inc c
+    cpl
+    ld h,a
+    ;L is 0, H is the current carry
+    ;E is the lower 8 bits
+    ; Load the next set of bits (LSB of input) into L so that they can be rotated into H
+    ld l,e
+    ;Iteration 5
+    add hl,hl
+    add hl,hl
+    rl c
+    ld a,c
+    rla
+    sub h
+    jr nc,$+5
+    inc c
+    cpl
+    ld h,a
+    ;Iteration 6
+    add hl,hl
+    add hl,hl
+    rl c
+    ld a,c
+    rla
+    sub h
+    jr nc,$+5
+    inc c
+    cpl
+    ld h,a
+    ;Iteration 7
+    ; Now we need to start worrying about 8 bit overflow.
+    ; In particular, the carry register, H should be ideally 9 bits for this iteration, 10 for the last.
+    ; The accumulator, C, is 8 bits, but we need to compare H to 2*C, and 2*C is up to 9 bits on the last iteration.
+    ;l has 4 more bits to rotate into h
+    sla c \ ld a,c \ add a,a
+    add hl,hl
+    add hl,hl
+    jr nc,$+6
+    sub h \ jp $+6
+    sub h
+    jr nc,$+5
+    inc c
+    cpl
+    ld h,a
+    ;Iteration 8
+    ; A lot of fancy stuff here
+    ; D is 0, from way back at the beginning
+    ; now I put H->E so that DE can hold the potentially 10-bit number
+    ; Now C->A, L->H
+    ; H thus has the last two bits of the input that need to be rotated into DE
+    ; L has the value of the accumualtor which needs to be multiplied by 4 for a comparison to DE
+    ; So 2 shifts of HL into DE results in DE holding the carry, HL holding 4*accumulated result!    
+    ld e,h
+    ld h,l
+    ld l,c
+    ld a,l
+    add hl,hl \ rl e \ rl d
+    add hl,hl \ rl e \ rl d
+    sbc hl,de
+    ;the c flag now has the state of the last bit of the result, HL does not need to be restored.
+    rla
+    ret
+
